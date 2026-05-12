@@ -1,0 +1,71 @@
+# 服务配置
+server:
+  host: "0.0.0.0"
+  port: 8000
+
+# LLM配置（兼容 OpenAI SDK：api_key / base_url / model 可由 .env 覆盖）
+llm:
+  provider: "openai" # openai | baidu | aliyun
+  model: "${OPENAI_MODEL}"
+  api_key: "${OPENAI_API_KEY}"
+  base_url: "${OPENAI_BASE_URL}"
+  timeout: 120
+  max_tokens: 2048
+  cache_ttl_seconds: 3600
+  json_response_format: false
+
+# 数据库连接（只读账号）— 生产环境建议改为环境变量占位
+# 本地联调可加 sqlite（需 LLM 解析出 connection 名一致），例如：
+#   local_sqlite:
+#     url: "sqlite:////tmp/openclaw_local.db"
+#     max_rows: 10
+#     timeout: 5
+database:
+  main_db:
+    url: "${DATABASE_MAIN_URL}"
+    max_rows: 10
+    timeout: 5
+  log_db:
+    url: "mysql+pymysql://readonly:pass@log.internal:3306/logs"
+    max_rows: 10
+    timeout: 5
+  dream:
+    url: "${DATABASE_DREAM_URL}"
+    max_rows: 10
+    timeout: 5
+
+# 模型偶发使用非配置名时的映射（键 -> config.database 下的真实连接名）
+database_connection_aliases:
+  default_db: main_db
+  dream_db: dream
+
+# 文件路径白名单
+file:
+  allowed_paths:
+    - "/var/log"
+    - "/data/logs"
+    - "/tmp"
+  max_lines: 100
+
+# API白名单
+api:
+  whitelist:
+    - "api.internal.com"
+    - "hook.example.com"
+    - "api.github.com"
+  timeout: 5
+
+# 浏览器工具（Playwright）；外网文档类场景不限制域名，仅允许 http/https
+browser:
+  navigation_timeout_seconds: 30
+
+# IM配置
+im:
+  feishu:
+    app_id: "${FEISHU_APP_ID}"
+    app_secret: "${FEISHU_APP_SECRET}"
+    encrypt_key: "${FEISHU_ENCRYPT_KEY}"
+  wechat:
+    corp_id: "${WECHAT_CORP_ID}"
+    secret: "${WECHAT_SECRET}"
+    agent_id: "${WECHAT_AGENT_ID}"
