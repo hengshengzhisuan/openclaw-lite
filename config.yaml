@@ -38,6 +38,7 @@ database:
 database_connection_aliases:
   default_db: main_db
   dream_db: dream
+  recording: recording
 
 # 文件路径白名单
 file:
