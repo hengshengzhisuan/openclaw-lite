@@ -55,6 +55,36 @@ class BrowserConfig(BaseModel):
     navigation_timeout_seconds: int = 30
 
 
+class ParserConfig(BaseModel):
+    """说明书 3.1 一句话执行：在不动 4.1 系统提示词的前提下，用用户消息后缀补强 database 的日期/SQL 规则。"""
+
+    # 「昨天/今日/新增」等且用户未给出时间列名时，query 里使用的默认列名（与说明书示例 orders.created_at 一致）
+    database_default_time_column: str = "created_at"
+    # 业务表结构提示，拼进解析后缀（如：recordings 表时间列为 xxx）
+    database_extra_hints: str = ""
+
+
+class ImFeishuConfig(BaseModel):
+    app_id: str = ""
+    app_secret: str = ""
+    encrypt_key: str = ""
+    # 与飞书事件订阅「Verification Token」一致时校验 header.token / token 字段；空则不校验
+    verification_token: str = ""
+
+
+class ImWechatConfig(BaseModel):
+    corp_id: str = ""
+    secret: str = ""
+    agent_id: str = ""
+    # 回调 URL 校验用（企业微信管理后台「Token」）；完整加解密需 EncodingAESKey，见 core/im/wechat_stub.py 说明
+    callback_token: str = ""
+
+
+class ImConfig(BaseModel):
+    feishu: ImFeishuConfig = Field(default_factory=ImFeishuConfig)
+    wechat: ImWechatConfig = Field(default_factory=ImWechatConfig)
+
+
 class AppSettings(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
@@ -66,6 +96,8 @@ class AppSettings(BaseModel):
     file: FileAccessConfig = Field(default_factory=FileAccessConfig)
     api: ApiAccessConfig = Field(default_factory=ApiAccessConfig)
     browser: BrowserConfig = Field(default_factory=BrowserConfig)
+    im: ImConfig = Field(default_factory=ImConfig)
+    parser: ParserConfig = Field(default_factory=ParserConfig)
 
     def resolve_database_connection(self, raw: str) -> str:
         name = (raw or "").strip()

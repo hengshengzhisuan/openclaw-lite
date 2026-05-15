@@ -14,6 +14,17 @@ llm:
   cache_ttl_seconds: 3600
   json_response_format: false
 
+# 解析层补充（不修改说明书 4.1 系统提示词；仅追加在用户消息末尾）
+parser:
+  database_default_time_column: started_at
+  database_extra_hints: |
+    recording 库：connection 必须为配置里存在的键名「recording」（MySQL 库名由 DATABASE_RECORDING_URL 决定，与表名无关）。
+    存储「录音」数据的表名固定为 **recordings**（小写 + 结尾 s）。
+    禁止使用不存在的表名：recording_data、recording_record、recordings_data 等；一律只用 **recordings**。
+    查「前几条」若无排序要求可用：SELECT * FROM recordings LIMIT 3；
+    若需按时间从新到旧：SELECT * FROM recordings ORDER BY started_at DESC LIMIT 3（时间列以表中真实字段为准，可为 started_at 或 created_at）。
+    若用户要「用户表 / users 表 / user 账号数据」（不是录音内容）：必须用 **FROM users**，不得因「recording 库」就误用 recordings；只有「录音/录音数据」才用 recordings。
+
 # 数据库连接（只读账号）— 生产环境建议改为环境变量占位
 # 本地联调可加 sqlite（需 LLM 解析出 connection 名一致），例如：
 #   local_sqlite:
@@ -21,8 +32,8 @@ llm:
 #     max_rows: 10
 #     timeout: 5
 database:
-  main_db:
-    url: "${DATABASE_MAIN_URL}"
+  recording:
+    url: "${DATABASE_RECORDING_URL}"
     max_rows: 10
     timeout: 5
   log_db:
@@ -38,7 +49,7 @@ database:
 database_connection_aliases:
   default_db: main_db
   dream_db: dream
-  recording: recording123456
+  recording_db: recording
 
 # 文件路径白名单
 file:
@@ -66,7 +77,9 @@ im:
     app_id: "${FEISHU_APP_ID}"
     app_secret: "${FEISHU_APP_SECRET}"
     encrypt_key: "${FEISHU_ENCRYPT_KEY}"
+    verification_token: "${FEISHU_VERIFICATION_TOKEN}"
   wechat:
     corp_id: "${WECHAT_CORP_ID}"
     secret: "${WECHAT_SECRET}"
     agent_id: "${WECHAT_AGENT_ID}"
+    callback_token: "${WECHAT_CALLBACK_TOKEN}"
