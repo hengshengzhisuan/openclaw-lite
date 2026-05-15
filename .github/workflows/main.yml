@@ -1,0 +1,79 @@
+# Git 仓库根 = 本后端项目根（Dockerfile、app/ 在根目录）
+name: release-amd64-image
+
+on:
+  workflow_dispatch:
+    inputs:
+      version_label:
+        description: "制品版本号（写入文件名与镜像 tag），如 v1.0.0-rc1。留空则使用 dev-<短 SHA>"
+        required: false
+        type: string
+        default: ""
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+env:
+  IMAGE_NAME: openclaw-lite
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Compute version & artifact name
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ github.ref_type }}" == "tag" ]]; then
+            VERSION="${{ github.ref_name }}"
+          elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && [[ -n "${{ github.event.inputs.version_label }}" ]]; then
+            VERSION="${{ github.event.inputs.version_label }}"
+          else
+            VERSION="dev-${GITHUB_SHA::7}"
+          fi
+          ARTIFACT="${IMAGE_NAME}_${VERSION}_linux_amd64.tar.gz"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "artifact=$ARTIFACT" >> "$GITHUB_OUTPUT"
+          echo "Computed version=$VERSION artifact=$ARTIFACT"
+
+      - name: Build linux/amd64 image (load to local docker)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64
+          load: true
+          tags: ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+
+      - name: Export image as tar.gz
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker save "${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}" | gzip -c > "${{ steps.meta.outputs.artifact }}"
+
+      - name: Upload workflow artifact（手动运行 / 非 tag 时下载）
+        if: github.ref_type != 'tag'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.IMAGE_NAME }}-${{ steps.meta.outputs.version }}
+          path: ${{ steps.meta.outputs.artifact }}
+          retention-days: 30
+
+      - name: Create GitHub Release 并上传制品（仅推送 git tag 如 v1.0.0）
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: ${{ steps.meta.outputs.artifact }}
