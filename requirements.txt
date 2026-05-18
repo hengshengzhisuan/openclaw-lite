@@ -25,3 +25,4 @@ sqlalchemy==2.0.44
 psycopg2-binary==2.9.11
 pymysql==1.1.2
 playwright==1.57.0
+pycryptodome==3.23.0
