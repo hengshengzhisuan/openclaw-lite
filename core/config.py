@@ -13,6 +13,9 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 class ServerConfig(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8000
+    # 启动后是否在默认浏览器打开对话页
+    open_chat_on_startup: bool = False
+    chat_user_id: str = "local_user"
 
 
 class LLMConfig(BaseModel):
@@ -55,6 +58,15 @@ class BrowserConfig(BaseModel):
     navigation_timeout_seconds: int = 30
 
 
+class WeatherConfig(BaseModel):
+    """Open-Meteo 天气查询（无需 API Key）。"""
+
+    default_city: str = "北京"
+    timeout: int = 10
+    geocoding_url: str = "https://geocoding-api.open-meteo.com/v1/search"
+    forecast_url: str = "https://api.open-meteo.com/v1/forecast"
+
+
 class ParserConfig(BaseModel):
     """说明书 3.1 一句话执行：在不动 4.1 系统提示词的前提下，用用户消息后缀补强 database 的日期/SQL 规则。"""
 
@@ -76,8 +88,10 @@ class ImWechatConfig(BaseModel):
     corp_id: str = ""
     secret: str = ""
     agent_id: str = ""
-    # 回调 URL 校验用（企业微信管理后台「Token」）；完整加解密需 EncodingAESKey，见 core/im/wechat_stub.py 说明
+    # 接收消息回调 URL 的 Token（与企微后台一致）
     callback_token: str = ""
+    # 接收消息 EncodingAESKey（43 位，与企微后台一致）
+    encoding_aes_key: str = ""
 
 
 class ImConfig(BaseModel):
@@ -96,6 +110,7 @@ class AppSettings(BaseModel):
     file: FileAccessConfig = Field(default_factory=FileAccessConfig)
     api: ApiAccessConfig = Field(default_factory=ApiAccessConfig)
     browser: BrowserConfig = Field(default_factory=BrowserConfig)
+    weather: WeatherConfig = Field(default_factory=WeatherConfig)
     im: ImConfig = Field(default_factory=ImConfig)
     parser: ParserConfig = Field(default_factory=ParserConfig)
 

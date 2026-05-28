@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import logging
+import os
+import threading
 import time
+import webbrowser
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -11,6 +14,7 @@ from core.execute_pipeline import run_execute_pipeline
 from core.im.routes import router as im_router
 from core.llm_client import LLMClient
 from core.schemas import ExecuteRequest, ExecuteResponse, HealthResponse
+from core.ui.routes import router as ui_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,6 +26,26 @@ _started_at: float = 0.0
 _settings: AppSettings | None = None
 _llm: LLMClient | None = None
 
+log = logging.getLogger("openclaw.main")
+
+
+def _should_open_chat_on_startup(settings: AppSettings) -> bool:
+    env = os.environ.get("OPENCLAW_OPEN_CHAT_ON_START", "").strip().lower()
+    if env in ("0", "false", "no", "off"):
+        return False
+    if env in ("1", "true", "yes", "on"):
+        return True
+    return settings.server.open_chat_on_startup
+
+
+def _schedule_open_chat(port: int) -> None:
+    url = f"http://127.0.0.1:{port}/"
+    try:
+        webbrowser.open(url)
+        log.info("Opened chat UI at %s", url)
+    except Exception as exc:  # noqa: BLE001
+        log.warning("Could not open chat UI in browser: %s", exc)
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -31,6 +55,8 @@ async def lifespan(app: FastAPI):
     _llm = LLMClient(_settings.llm)
     app.state.settings = _settings
     app.state.llm = _llm
+    if _should_open_chat_on_startup(_settings):
+        threading.Timer(0.8, _schedule_open_chat, args=(_settings.server.port,)).start()
     yield
     _llm = None
     _settings = None
@@ -39,6 +65,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="OpenClaw Lite", lifespan=lifespan)
+app.include_router(ui_router)
 app.include_router(im_router)
 
 

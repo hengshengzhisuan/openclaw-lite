@@ -5,6 +5,7 @@ from typing import Any
 
 from core.config import ParserConfig
 from core.llm_client import LLMClient
+from core.parser_database_fixup import correct_database_parse
 
 # 说明书 4.1 提示词模板（docx 原文；Unicode 转义保证与 Word 弯引号等一致）。
 _SYSTEM_PROMPT = (
@@ -35,7 +36,15 @@ def _build_user_suffix(parser_cfg: ParserConfig | None) -> str:
             "5) 「主库」「日志库」：connection 必须填本应用 config.yaml 里 `database` 下已存在的键名"
             "（常见为 main_db、log_db、recording 等，以实际配置为准）；勿发明不存在的 connection。\n"
             "6) 「error 级别」等：使用真实表里级别字段名（如 level、severity），与用户表述一致；不得臆造列名。\n"
-            "7) 仅输出一条合法 SELECT（与执行层规则一致）。"
+            "7) 仅输出一条合法 SELECT（与执行层规则一致）。\n"
+            "8) **用户数据 vs 录音数据**：出现「用户数据/用户信息/用户表/users/项目用户/账号」等时，"
+            "query 必须用 `FROM users`；仅当用户明确要「录音数据/录音内容/录音记录」时才用 `FROM recordings`。"
+            "「录音笔」是产品/项目名，不等于查录音表；例如「录音笔项目用户数据」→ `SELECT * FROM users LIMIT n`。\n"
+            "9) **天气查询**（新增工具 weather，不影响 browser/database/file/api）：\n"
+            "   - 用户问天气、气温、下雨、冷不冷、湿度、风力等 → "
+            '`{"tool":"weather","city":"城市名"}`\n'
+            "   - city 用中文或英文地名；未指定城市时使用配置默认城市。\n"
+            "   - 示例：「北京今天天气怎么样」→ `{\"tool\":\"weather\",\"city\":\"北京\"}`"
         )
         extra = (parser_cfg.database_extra_hints or "").strip()
         if extra:
@@ -56,4 +65,4 @@ async def parse_user_message(
     )
     if "tool" not in data:
         raise ValueError(f"LLM output missing 'tool': {json.dumps(data, ensure_ascii=False)}")
-    return data
+    return correct_database_parse(message, data)

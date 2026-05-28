@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>OpenClaw Lite</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --border: #2d3a4f;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --user-bubble: #1e3a5f;
+      --bot-bubble: #243044;
+      --error: #f87171;
+      --success: #4ade80;
+      --radius: 12px;
+      --shadow: 0 24px 48px rgba(0, 0, 0, 0.45);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC",
+        "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background: radial-gradient(ellipse at 50% 0%, #1a2744 0%, var(--bg) 55%);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .dialog {
+      width: min(520px, 100%);
+      height: min(640px, calc(100vh - 48px));
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    .dialog-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .dialog-header .logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, var(--accent), #6366f1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .dialog-header h1 {
+      font-size: 1rem;
+      font-weight: 600;
+    }
+
+    .dialog-header p {
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .msg {
+      max-width: 92%;
+      padding: 10px 14px;
+      border-radius: 10px;
+      font-size: 0.875rem;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .msg.user {
+      align-self: flex-end;
+      background: var(--user-bubble);
+      border-bottom-right-radius: 4px;
+    }
+
+    .msg.assistant {
+      align-self: flex-start;
+      background: var(--bot-bubble);
+      border-bottom-left-radius: 4px;
+    }
+
+    .msg.system {
+      align-self: center;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.8rem;
+      text-align: center;
+      max-width: 100%;
+    }
+
+    .msg.assistant.error {
+      border: 1px solid rgba(248, 113, 113, 0.35);
+      color: #fecaca;
+    }
+
+    .msg .meta {
+      margin-top: 8px;
+      font-size: 0.7rem;
+      color: var(--muted);
+    }
+
+    .composer {
+      padding: 12px 16px 16px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 8px;
+      align-items: flex-end;
+    }
+
+    .composer textarea {
+      flex: 1;
+      resize: none;
+      min-height: 44px;
+      max-height: 120px;
+      padding: 10px 14px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg);
+      color: var(--text);
+      font: inherit;
+      font-size: 0.875rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+
+    .composer textarea:focus {
+      border-color: var(--accent);
+    }
+
+    .composer textarea::placeholder {
+      color: var(--muted);
+    }
+
+    .composer button {
+      flex-shrink: 0;
+      height: 44px;
+      padding: 0 18px;
+      border: none;
+      border-radius: 10px;
+      background: var(--accent);
+      color: #fff;
+      font: inherit;
+      font-size: 0.875rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+
+    .composer button:hover:not(:disabled) {
+      background: var(--accent-hover);
+    }
+
+    .composer button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .typing {
+      align-self: flex-start;
+      color: var(--muted);
+      font-size: 0.8rem;
+      padding: 4px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="dialog" role="dialog" aria-labelledby="chat-title" aria-modal="true">
+    <header class="dialog-header">
+      <div class="logo" aria-hidden="true">🦞</div>
+      <div>
+        <h1 id="chat-title">OpenClaw Lite</h1>
+        <p>自然语言执行白名单工具</p>
+      </div>
+    </header>
+
+    <div class="messages" id="messages" aria-live="polite"></div>
+
+    <form class="composer" id="composer">
+      <textarea
+        id="input"
+        rows="1"
+        placeholder="输入指令，例如：查 recording 库前 3 条录音"
+        autocomplete="off"
+      ></textarea>
+      <button type="submit" id="send-btn">发送</button>
+    </form>
+  </div>
+
+  <script>
+    const USER_ID = "__CHAT_USER_ID__";
+    const messagesEl = document.getElementById("messages");
+    const form = document.getElementById("composer");
+    const input = document.getElementById("input");
+    const sendBtn = document.getElementById("send-btn");
+
+    function appendMessage(role, text, meta) {
+      const el = document.createElement("div");
+      el.className = "msg " + role;
+      el.textContent = text;
+      if (meta) {
+        const m = document.createElement("span");
+        m.className = "meta";
+        m.textContent = meta;
+        el.appendChild(m);
+      }
+      messagesEl.appendChild(el);
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+      return el;
+    }
+
+    appendMessage(
+      "system",
+      "你好，我是 OpenClaw Lite。用自然语言描述需求即可，例如查库、读日志、打开网页等。"
+    );
+
+    let typingEl = null;
+
+    function setLoading(on) {
+      sendBtn.disabled = on;
+      input.disabled = on;
+      if (on) {
+        typingEl = document.createElement("div");
+        typingEl.className = "typing";
+        typingEl.textContent = "正在解析并执行…";
+        messagesEl.appendChild(typingEl);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      } else if (typingEl) {
+        typingEl.remove();
+        typingEl = null;
+      }
+    }
+
+    async function sendMessage(text) {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+
+      appendMessage("user", trimmed);
+      input.value = "";
+      setLoading(true);
+
+      try {
+        const res = await fetch("/execute", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_id: USER_ID,
+            platform: "web",
+            message: trimmed,
+          }),
+        });
+
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          const detail = data.detail || res.statusText || "请求失败";
+          appendMessage("assistant error", String(detail));
+          return;
+        }
+
+        const body = data.result || data.error || "(无返回内容)";
+        const meta =
+          (data.tool ? "工具: " + data.tool + " · " : "") +
+          "状态: " +
+          data.status +
+          (data.duration != null ? " · " + data.duration + "s" : "");
+
+        const role = data.status === "success" ? "assistant" : "assistant error";
+        appendMessage(role, body, meta);
+      } catch (err) {
+        appendMessage("assistant error", "网络错误: " + (err.message || String(err)));
+      } finally {
+        setLoading(false);
+        input.focus();
+      }
+    }
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      sendMessage(input.value);
+    });
+
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        form.requestSubmit();
+      }
+    });
+
+    input.focus();
+  </script>
+</body>
+</html>

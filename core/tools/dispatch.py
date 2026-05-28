@@ -9,6 +9,7 @@ from core.tools.base import BaseTool
 from core.tools.browser_tool import BrowserTool
 from core.tools.database_tool import DatabaseTool
 from core.tools.file_read_tool import FileReadTool
+from core.tools.weather_tool import WeatherTool
 
 log = logging.getLogger("openclaw.execute")
 
@@ -17,6 +18,7 @@ _TOOLS: dict[str, type[BaseTool]] = {
     "file": FileReadTool,
     "api": ApiTool,
     "browser": BrowserTool,
+    "weather": WeatherTool,
 }
 
 
