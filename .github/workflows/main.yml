@@ -1,20 +1,30 @@
-# Git 仓库根 = 本后端项目根（Dockerfile、app/ 在根目录）
+# OpenClaw Lite：构建 linux/amd64 Docker 镜像并导出 tar.gz 制品
+# 触发方式：
+#   1. 推送 git tag（v*）→ 构建 + 创建 GitHub Release
+#   2. 推送 main 分支 → 构建 + 上传 Actions Artifact（dev-<sha>）
+#   3. Actions 页手动 workflow_dispatch → 构建 + Artifact；可填版本号
 name: release-amd64-image
 
 on:
   workflow_dispatch:
     inputs:
       version_label:
-        description: "制品版本号（写入文件名与镜像 tag），如 v1.0.0-rc1。留空则使用 dev-<短 SHA>"
+        description: "制品版本号（镜像 tag 与文件名），如 v1.0.0-rc1；留空则用 dev-<短 SHA>"
         required: false
         type: string
         default: ""
   push:
+    branches:
+      - main
     tags:
       - "v*"
 
 permissions:
   contents: write
+
+concurrency:
+  group: release-amd64-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 env:
   IMAGE_NAME: openclaw-lite
@@ -38,15 +48,18 @@ jobs:
             VERSION="${{ github.ref_name }}"
           elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]] && [[ -n "${{ github.event.inputs.version_label }}" ]]; then
             VERSION="${{ github.event.inputs.version_label }}"
+          elif [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+            VERSION="main-${GITHUB_SHA::7}"
           else
             VERSION="dev-${GITHUB_SHA::7}"
           fi
           ARTIFACT="${IMAGE_NAME}_${VERSION}_linux_amd64.tar.gz"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "safe_version=$SAFE_VERSION" >> "$GITHUB_OUTPUT"
           echo "artifact=$ARTIFACT" >> "$GITHUB_OUTPUT"
           echo "Computed version=$VERSION artifact=$ARTIFACT"
 
-      - name: Build linux/amd64 image (load to local docker)
+      - name: Build linux/amd64 image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -54,22 +67,25 @@ jobs:
           platforms: linux/amd64
           load: true
           tags: ${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
       - name: Export image as tar.gz
         shell: bash
         run: |
           set -euo pipefail
           docker save "${{ env.IMAGE_NAME }}:${{ steps.meta.outputs.version }}" | gzip -c > "${{ steps.meta.outputs.artifact }}"
+          ls -lh "${{ steps.meta.outputs.artifact }}"
 
-      - name: Upload workflow artifact（手动运行 / 非 tag 时下载）
+      - name: Upload workflow artifact（main 推送 / 手动运行）
         if: github.ref_type != 'tag'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.IMAGE_NAME }}-${{ steps.meta.outputs.version }}
+          name: ${{ env.IMAGE_NAME }}-${{ steps.meta.outputs.safe_version }}
           path: ${{ steps.meta.outputs.artifact }}
           retention-days: 30
 
-      - name: Create GitHub Release 并上传制品（仅推送 git tag 如 v1.0.0）
+      - name: Create GitHub Release 并上传制品（仅推送 v* tag）
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
@@ -77,3 +93,21 @@ jobs:
           name: ${{ github.ref_name }}
           generate_release_notes: true
           files: ${{ steps.meta.outputs.artifact }}
+
+      - name: Job summary
+        shell: bash
+        run: |
+          {
+            echo "## OpenClaw Lite 制品"
+            echo ""
+            echo "| 项 | 值 |"
+            echo "| --- | --- |"
+            echo "| 版本 | \`${{ steps.meta.outputs.version }}\` |"
+            echo "| 制品文件 | \`${{ steps.meta.outputs.artifact }}\` |"
+            echo "| 触发 | \`${{ github.event_name }}\` / \`${{ github.ref }}\` |"
+            if [[ "${{ github.ref_type }}" == "tag" ]]; then
+              echo "| 下载 | [GitHub Release](https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}) |"
+            else
+              echo "| 下载 | 本 workflow **Artifacts** 栏 |"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
